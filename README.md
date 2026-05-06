@@ -45,12 +45,3 @@ Run the test suite with:
 ```sh
 raco test interpreter-tests.rkt
 ```
-
-## Suggested Commit Flow
-
-For an industry-style history, commit in small stages:
-
-1. Add supplied parser, lexer, and original Part 1 tests.
-2. Add the Stage 1 interpreter implementation.
-3. Add RackUnit coverage for the supplied tests.
-4. Add README and changelog documentation.
