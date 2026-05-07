@@ -4,7 +4,7 @@ Java-lite Interpreter is a Racket interpreter for a small Java/C-style language.
 
 ## Current Stage
 
-**Version 0.1.0: Stage 1 Interpreter**
+**Version 0.2.0: Stage 2 Control Flow**
 
 This stage supports:
 
@@ -18,17 +18,25 @@ This stage supports:
 - `if` / `else`
 - `while`
 - `return`
+- block scopes with `{ ... }`
+- `break`
+- `continue`
+- `throw`
+- `try` / `catch` / `finally`
 
-The interpreter keeps the variable state behind helper functions so later stages
-can change the state representation without rewriting the evaluator.
+The interpreter keeps the variable state behind helper functions and uses
+layered scopes so block-local variables are removed when the block exits.
+Statement evaluation uses continuations for `return`, `break`, `continue`, and
+`throw`.
 
 ## Files
 
-- `interpreter.rkt` - Stage 1 interpreter and public `interpret` function.
+- `interpreter.rkt` - Stage 2 interpreter and public `interpret` function.
 - `simpleParser.rkt` - supplied parser.
 - `lex.rkt` - supplied lexer, renamed from `lex-2.rkt` so the parser can require it.
-- `interpreter-tests.rkt` - RackUnit tests for the supplied Part 1 programs.
+- `interpreter-tests.rkt` - RackUnit tests for the supplied Part 1 and Part 2 programs.
 - `part1tests.html` - original downloaded sample tests.
+- `part2tests.html` - original downloaded Stage 2 sample tests.
 - `CHANGELOG.md` - versioned project history.
 
 ## Usage
