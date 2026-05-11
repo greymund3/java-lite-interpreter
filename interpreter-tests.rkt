@@ -23,470 +23,478 @@
       (check-exn exn:fail?
                  (lambda () (run-program source))))))
 
-(define part1-tests
+(define part3-tests
   (test-suite
-   "Part 1 sample programs"
+   "Part 3 sample programs"
 
-   (check-program "test 01: literal return" 150
-                  "return 150;")
+   (check-program "test 01: main with local code" 10
+                  "function main() {
+                     var x = 10;
+                     var y = 20;
+                     var z = 30;
+                     var min = 0;
 
-   (check-program "test 02: arithmetic precedence" -4
-                  "return 6 * (8 + (5 % 3)) / 11 - 9;")
-
-   (check-program "test 03: declaration assignment lookup" 10
-                  "var z;
-                   z = 10;
-                   return z;")
-
-   (check-program "test 04: declaration with value" 16
-                  "var x = (5 * 7 - 3) / 2;
-                   return x;")
-
-   (check-program "test 05: expression using variables" 220
-                  "var x = 10;
-                   var y = 12 + x;
-                   return x * y;")
-
-   (check-program "test 06: <= branch" 5
-                  "var x = 5;
-                   var y = 6;
-                   var m;
-                   if (x <= y)
-                     m = x;
-                   else
-                     m = y;
-                   return m;")
-
-   (check-program "test 07: >= branch" 6
-                  "var x = 5;
-                   var y = 6;
-                   var m;
-                   if (x >= y)
-                     m = x;
-                   else
-                     m = y;
-                   return m;")
-
-   (check-program "test 08: !=" 10
-                  "var x = 5;
-                   var y = 6;
-                   if (x != y)
-                     x = 10;
-                   return x;")
-
-   (check-program "test 09: ==" 5
-                  "var x = 5;
-                   var y = 6;
-                   if (x == y)
-                     x = 10;
-                   return x;")
-
-   (check-program "test 10: unary minus" -39
-                  "return 6 * -(4 * 2) + 9;")
-
-   (check-error-program "test 11: assignment before declaration"
-                        "var x = 1;
-                         y = 10 + x;
-                         return y;")
-
-   (check-error-program "test 12: lookup before declaration"
-                        "var y;
-                         y = x;
-                         return y;")
-
-   (check-error-program "test 13: lookup before assignment"
-                        "var x;
-                         var y;
-                         x = x + y;
-                         return x;")
-
-   (check-error-program "test 14: redeclaration"
-                        "var x = 10;
-                         var y = 20;
-                         var x = x + y;
-                         return x;")
-
-   (check-program "test 15: boolean operators" 'true
-                  "return (10 > 20) || (5 - 6 < 10) && true;")
-
-   (check-program "test 16: boolean if" 100
-                  "var x = 10;
-                   var y = 20;
-                   if (x < y && (x % 2) == 0)
-                     return 100;
-                   else
-                     return 200;")
-
-   (check-program "test 17: boolean variable result" 'false
-                  "var x = 100 % 2 == 0;
-                   var y = 10 >= 20;
-                   var z;
-                   if (x || y)
-                     z = y;
-                   else
-                     z = x;
-                   return z;")
-
-   (check-program "test 18: not operator" 'true
-                  "var x = 10;
-                   var y = 20;
-                   var z = 20 >= 10;
-                   if (!z || false)
-                     z = !z;
-                   else
-                     z = z;
-                   return z;")
-
-   (check-program "test 19: while loop" 128
-                  "var x = 2;
-                   while (x < 100)
-                     x = x * 2;
-                   return x;")
-
-   (check-program "test 20: while loop decrement" 12
-                  "var x = 20;
-                   var y = 128;
-                   while (x * x > 128)
-                     x = x - 1;
-                   x = x + 1;
-                   return x;")
-
-   (check-program "test 21: chained assignment declaration" 30
-                  "var x;
-                   var y;
-                   var z = x = y = 10;
-                   return x + y + z;")
-
-   (check-program "test 22: assignment in condition" 11
-                  "var x;
-                   var y;
-                   x = y = 10;
-                   if ((x = x + 1) > y)
-                     return x;
-                   else
-                     return y;")
-
-   (check-program "test 23: assignment expression order" 1106
-                  "var x;
-                   var y = (x = 5) + (x = 6);
-                   return y * 100 + x;")
-
-   (check-program "test 24: assignment on left affects right" 12
-                  "var x = 10;
-                   x = (x = 6) + x;
-                   return x;")
-
-   (check-program "test 25: right assignment after left lookup" 16
-                  "var x = 10;
-                   x = x + (x = 6);
-                   return x;")
-
-   (check-program "test 26: chained nested assignment" 72
-                  "var x;
-                   var y;
-                   var z;
-                   var w = (x = 6) + (y = z = 20);
-                   return w + x + y + z;")
-
-   (check-program "test 27: assignment in while condition" 21
-                  "var x = 0;
-                   while ((x = x + 1) < 21)
-                     x = x;
-                   return x;")
-
-   (check-program "test 28: gcd with expression assignments" 164
-                  "var a = 31160;
-                   var b = 1476;
-                   var r = a % b;
-                   while (r != 0)
-                     r = (a = b) % (b = r);
-                   return b;")))
-
-(define part2-tests
-  (test-suite
-   "Part 2 sample programs"
-
-   (check-program "test 01: block updates outer variable" 20
-                  "var x = 10;
-                   {
-                     var y = 2;
-                     var z = x * y;
-                     x = z;
-                   }
-                   return x;")
-
-   (check-program "test 02: gcd with blocks" 164
-                  "var a = 31160;
-                   var b = 1476;
-                   if (a < b) {
-                     var temp = a;
-                     a = b;
-                     b = temp;
-                   }
-                   var r = a % b;
-                   while (r != 0) {
-                     a = b;
-                     b = r;
-                     r = a % b;
-                   }
-                   return b;")
-
-   (check-program "test 03: compound while condition" 32
-                  "var x = 0;
-                   var y = 10;
-                   while (!(x >= y) || !(y > 25)) {
-                     x = x + 2;
-                     y = y + 1;
-                   }
-                   return x;")
-
-   (check-program "test 04: nested block scope" 2
-                  "var x = 1;
-                   var y = x + 1;
-                   if (x < y) {
-                     var z = 10;
-
-                     if (x < z) {
-                       var swap = y;
-                       y = x;
-                       x = swap;
-                     }
-                   }
-                   return x;")
-
-   (check-error-program "test 05: block local variable is out of scope"
-                        "var x = 10;
-                         var y = 4;
-                         if (x < y) {
-                           var min = x;
-                         }
-                         else {
-                           var min = y;
-                         }
-                         return min;")
-
-   (check-program "test 06: return skips later statements" 25
-                  "var x = 0;
-                   x = x + 25;
-                   return x;
-                   x = x + 25;
-                   return x;
-                   x = x + 25;
-                   return x;")
-
-   (check-program "test 07: return exits loop" 21
-                  "var x = 0;
-                   var result = 0;
-
-                   while (x < 10) {
-                     if (result > 15) {
-                       return result;
-                     }
-                     result = result + x;
-                     x = x + 1;
-                   }
-                   return result;")
-
-   (check-program "test 08: continue skips loop body tail" 6
-                  "var x = 0;
-                   while (x < 6) {
-                     x = x + 1;
-                     continue;
-                     x = x + 100;
-                   }
-                   return x;")
-
-   (check-program "test 09: break exits loop" -1
-                  "var x = 0;
-                   while (x < 10) {
-                     x = x - 1;
-                     break;
-                     x = x + 100;
-                   }
-                   return x;")
-
-   (check-program "test 10: nested break and continue" 789
-                  "var x = 0;
-                   var y = x;
-                   var z = y;
-                   while (1 == 1) {
-                     y = y - x;
-                     while (2 == 2) {
-                       z = z - y;
-                       while (3 == 3) {
-                         z = z + 1;
-                         if (z > 8)
-                           break;
-                         else
-                           continue;
-                       }
-                       y = y + 1;
-                       if (y <= 7)
-                         continue;
-                       else
-                         break;
-                     }
-                     x = x + 1;
-                     if (x > 6)
-                       break;
+                     if (x < y)
+                       min = x;
                      else
-                       continue;
-                   }
-                   return x * 100 + y * 10 + z;")
+                       min = y;
+                     if (min > z)
+                       min = z;
+                     return min;
+                   }")
 
-   (check-error-program "test 11: loop local out of scope after break"
-                        "var x = 0;
-                         while (x < 10) {
-                           var y = 0;
-                           x = x + 1;
-                           y = y - 1;
-                           break;
-                         }
-                         if (x > 0) {
-                           x = y;
-                         }
-                         return x;")
+   (check-program "test 02: global variables" 14
+                  "var x = 4;
+                   var y = 6 + x;
 
-   (check-error-program "test 12: loop local out of scope after continue"
-                        "var x = 1;
-                         var y = 2;
-                         if (x < y) {
-                           var z = 0;
-                           while (z < 100) {
-                             var a = 1;
-                             z = z + a;
-                             continue;
-                             z = 1000;
-                           }
-                           if (z != x) {
-                             z = a;
-                           }
-                         }
-                         return x;")
+                   function main() {
+                     return x + y;
+                   }")
 
-   (check-error-program "test 13: break outside loop"
-                        "var x = 1;
-                         break;
-                         return x;")
-
-   (check-program "test 14: break with boolean condition" 12
+   (check-program "test 03: function changes globals" 45
                   "var x = 1;
-                   while (true) {
-                     x = x + 1;
-                     if (x > 10 && x % 2 == 0)
-                       break;
-                   }
-                   return x;")
+                   var y = 10;
+                   var r = 0;
 
-   (check-program "test 15: try finally without throw" 125
-                  "var x;
+                   function main() {
+                     while (x < y) {
+                       r = r + x;
+                       x = x + 1;
+                     }
+                     return r;
+                   }")
 
-                   try {
-                     x = 20;
-                     if (x < 0)
-                       throw 10;
-                     x = x + 5;
+   (check-program "test 04: recursive fib" 55
+                  "function fib(a) {
+                     if (a == 0)
+                       return 0;
+                     else if (a == 1)
+                       return 1;
+                     else
+                       return fib(a-1) + fib(a-2);
                    }
-                   catch(e) {
-                     x = e;
-                   }
-                   finally {
-                     x = x + 100;
-                   }
-                   return x;")
 
-   (check-program "test 16: catch then finally" 110
-                  "var x;
+                   function main() {
+                     return fib(10);
+                   }")
 
-                   try {
-                     x = 20;
-                     if (x > 10)
-                       throw 10;
-                     x = x + 5;
+   (check-program "test 05: parameters hide globals" 1
+                  "function min(x, y, z) {
+                     if (x < y) {
+                       if (x < z)
+                         return x;
+                       else if (z < x)
+                         return z;
+                     }
+                     else if (y > z)
+                       return z;
+                     else
+                       return y;
                    }
-                   catch(e) {
-                     x = e;
-                   }
-                   finally {
-                     x = x + 100;
-                   }
-                   return x;")
 
-   (check-program "test 17: nested throw and catch" 2000400
+                   var x = 10;
+                   var y = 20;
+                   var z = 30;
+
+                   var min1 = min(x,y,z);
+                   var min2 = min(z,y,x);
+
+                   function main() {
+                     var min3 = min(y,z,x);
+
+                     if (min1 == min3)
+                       if (min1 == min2)
+                         if (min2 == min3)
+                           return 1;
+                     return 0;
+                   }")
+
+   (check-program "test 06: static scoping" 115
+                  "var a = 10;
+                   var b = 20;
+
+                   function bmethod() {
+                     var b = 30;
+                     return a + b;
+                   }
+
+                   function cmethod() {
+                     var a = 40;
+                     return bmethod() + a + b;
+                   }
+
+                   function main () {
+                     var b = 5;
+                     return cmethod() + a + b;
+                   }")
+
+   (check-program "test 07: boolean parameters and returns" 'true
+                  "function minmax(a, b, min) {
+                     if (min && a < b || !min && a > b)
+                       return true;
+                     else
+                       return false;
+                   }
+
+                   function main() {
+                     return (minmax(10, 100, true) && minmax(5, 3, false));
+                   }")
+
+   (check-program "test 08: calls in expressions" 20
+                  "function fact(n) {
+                     var f = 1;
+                     while (n > 1) {
+                       f = f * n;
+                       n = n - 1;
+                     }
+                     return f;
+                   }
+
+                   function binom(a, b) {
+                     var val = fact(a) / (fact(b) * fact(a-b));
+                     return val;
+                   }
+
+                   function main() {
+                     return binom(6,3);
+                   }")
+
+   (check-program "test 09: call as argument" 24
+                  "function fact(n) {
+                     var r = 1;
+                     while (n > 1) {
+                       r = r * n;
+                       n = n - 1;
+                     }
+                     return r;
+                   }
+
+                   function main() {
+                     return fact(fact(3) - fact(2));
+                   }")
+
+   (check-program "test 10: ignored function return" 2
+                  "var count = 0;
+
+                   function f(a,b) {
+                     count = count + 1;
+                     a = a + b;
+                     return a;
+                   }
+
+                   function main() {
+                     f(1, 2);
+                     f(3, 4);
+                     return count;
+                   }")
+
+   (check-program "test 11: function without return" 35
                   "var x = 0;
-                   var j = 1;
+                   var y = 0;
 
-                   try {
-                     while (j >= 0) {
-                       var i = 10;
-                       while (i >= 0) {
-                         try {
-                           if (i == 0)
-                             throw 1000000;
-                           x = x + 10*i / i;
+                   function setx(a) {
+                     x = a;
+                   }
+
+                   function sety(b) {
+                     y = b;
+                   }
+
+                   function main() {
+                     setx(5);
+                     sety(7);
+                     return x * y;
+                   }")
+
+   (check-error-program "test 12: wrong argument count"
+                        "function f(a) {
+                           return a*a;
                          }
-                         catch(e) {
-                           if (j == 0)
-                             throw 1000000;
-                           x = x + e / j;
+
+                         function main() {
+                           return f(10, 11, 12);
+                         }")
+
+   (check-program "test 13: nested functions" 90
+                  "function main() {
+                     function h() {
+                       return 10;
+                     }
+
+                     function g() {
+                       return 100;
+                     }
+
+                     return g() - h();
+                   }")
+
+   (check-program "test 14: nested closures update outer locals" 69
+                  "function collatz(n) {
+                     var counteven = 0;
+                     var countodd = 0;
+
+                     function evenstep(n) {
+                       counteven = counteven + 1;
+                       return n / 2;
+                     }
+
+                     function oddstep(n) {
+                       countodd = countodd + 1;
+                       return 3 * n + 1;
+                     }
+
+                     while (n != 1) {
+                       if (n % 2 == 0)
+                         n = evenstep(n);
+                       else
+                         n = oddstep(n);
+                     }
+                     return counteven + countodd;
+                   }
+
+                   function main() {
+                     return collatz(111);
+                   }")
+
+   (check-program "test 15: nested scope shadowing" 87
+                  "function f(n) {
+                     var a;
+                     var b;
+                     var c;
+
+                     a = 2 * n;
+                     b = n - 10;
+
+                     function g(x) {
+                       var a;
+                       a = x + 1;
+                       b = 100;
+                       return a;
+                     }
+
+                     if (b == 0)
+                       c = g(a);
+                     else
+                       c = a / b;
+                     return a + b + c;
+                   }
+
+                   function main() {
+                     var x = f(10);
+                     var y = f(20);
+
+                     return x - y;
+                   }")
+
+   (check-program "test 16: nested functions inside functions" 64
+                  "function main() {
+                     var result;
+                     var base;
+
+                     function getpow(a) {
+                       var x;
+
+                       function setanswer(n) {
+                         result = n;
+                       }
+
+                       function recurse(m) {
+                         if (m > 0) {
+                           x = x * base;
+                           recurse(m-1);
                          }
-                         i = i - 1;
+                         else
+                           setanswer(x);
                        }
-                       j = j - 1;
+
+                       x = 1;
+                       recurse(a);
                      }
-                   }
-                   catch (e2) {
-                     x = x * 2;
-                   }
-                   return x;")
+                     base = 2;
+                     getpow(6);
+                     return result;
+                   }")
 
-   (check-program "test 18: finally after loop break" 101
-                  "var x = 10;
-                   var result = 1;
-
-                   try {
-                     while (x < 10000) {
-                       result = result - 1;
-                       x = x + 10;
-
-                       if (x > 1000) {
-                         throw x;
-                       }
-                       else if (x > 100) {
-                         break;
-                       }
-                     }
-                   }
-                   finally {
-                     result = result + x;
-                   }
-                   return result;")
-
-   (check-error-program "test 19: uncaught throw from catch"
-                        "var x = 10;
-                         var result = 1;
-
-                         try {
-                           while (x < 10000) {
-                             result = result - 1;
-                             x = x * 10;
-
-                             if (x > 1000)
-                               throw x;
+   (check-error-program "test 17: nested function cannot access sibling local"
+                        "function f(x) {
+                           function g(x) {
+                             var b;
+                             b = x;
+                             return 0;
                            }
-                         }
-                         catch (ex) {
-                           throw 1;
-                         }
-                         return result;")
 
-   (check-program "test 20: assignment in while condition" 21
-                  "var x = 0;
-                   while ((x = x + 1) < 21)
-                     x = x;
-                   return x;")))
+                           function h(x) {
+                             b = x;
+                             return 1;
+                           }
+
+                           return g(x) + h(x);
+                         }
+
+                         function main() {
+                           return f(10);
+                         }")
+
+   (check-program "test 18: function call in try without throw" 125
+                  "function divide(x, y) {
+                     if (y == 0)
+                       throw y;
+                     return x / y;
+                   }
+
+                   function main() {
+                     var x;
+
+                     try {
+                       x = divide(10, 5) * 10;
+                       x = x + divide(5, 1);
+                     }
+                     catch(e) {
+                       x = e;
+                     }
+                     finally {
+                       x = x + 100;
+                     }
+                     return x;
+                   }")
+
+   (check-program "test 19: throw inside function caught by caller" 100
+                  "function divide(x, y) {
+                     if (y == 0)
+                       throw y;
+                     return x / y;
+                   }
+
+                   function main() {
+                     var x;
+
+                     try {
+                       x = divide(10, 5) * 10;
+                       x = x + divide(5, 0);
+                     }
+                     catch(e) {
+                       x = e;
+                     }
+                     finally {
+                       x = x + 100;
+                     }
+                     return x;
+                   }")
+
+   (check-program "test 20: exception through nested function calls" 2000400
+                  "function divide(x, y) {
+                     if (y == 0)
+                       throw 1000000;
+                     return x / y;
+                   }
+
+                   function main() {
+                     var x = 0;
+                     var j = 1;
+
+                     try {
+                       while (j >= 0) {
+                         var i = 10;
+                         while (i >= 0) {
+                           try {
+                             x = x + divide(10*i, i);
+                           }
+                           catch(e) {
+                             x = x + divide(e, j);
+                           }
+                           i = i - 1;
+                         }
+                         j = j - 1;
+                       }
+                     }
+                     catch (e2) {
+                       x = x * 2;
+                     }
+                     return x;
+                   }")
+
+   (check-program "test 21: reference parameters" 3421
+                  "function swap1(x, y) {
+                     var temp = x;
+                     x = y;
+                     y = temp;
+                   }
+
+                   function swap2(&x, &y) {
+                     var temp = x;
+                     x = y;
+                     y = temp;
+                   }
+
+                   function main() {
+                     var a = 1;
+                     var b = 2;
+                     swap1(a,b);
+                     var c = 3;
+                     var d = 4;
+                     swap2(c,d);
+                     return a + 10*b + 100*c + 1000*d;
+                   }")
+
+   (check-program "test 22: assignment side effects with calls" 20332
+                  "var x;
+
+                   function f(a,b) {
+                     return a * 100 + b;
+                   }
+
+                   function fib(f) {
+                     var last = 0;
+                     var last1 = 1;
+
+                     while (f > 0) {
+                       f = f - 1;
+                       var temp = last1 + last;
+                       last = last1;
+                       last1 = temp;
+                     }
+                     return last;
+                   }
+
+                   function main() {
+                     var y;
+                     var z = f(x = fib(3), y = fib(4));
+                     return z * 100 + y * 10 + x;
+                   }")
+
+   (check-program "test 23: mixed value and reference params" 21
+                  "function gcd(a, &b) {
+                     if (a < b) {
+                       var temp = a;
+                       a = b;
+                       b = temp;
+                     }
+                     var r = a % b;
+                     while (r != 0) {
+                       a = b;
+                       b = r;
+                       r = a % b;
+                     }
+                     return b;
+                   }
+                   function main () {
+                     var x = 14;
+                     var y = 3 * x - 7;
+                     gcd(x,y);
+                     return x+y;
+                   }")
+
+   (check-error-program "extra: reference argument must be a variable"
+                        "function swap(&x, &y) {
+                           var temp = x;
+                           x = y;
+                           y = temp;
+                         }
+
+                         function main() {
+                           var x = 10;
+                           return swap(x, x + 1);
+                         }")))
 
 (module+ test
-  (run-tests (test-suite "Java-lite interpreter tests"
-                         part1-tests
-                         part2-tests)))
+  (run-tests part3-tests))
