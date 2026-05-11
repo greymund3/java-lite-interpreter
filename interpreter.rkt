@@ -1,19 +1,21 @@
 #lang racket
 
-(require "simpleParser.rkt")
+(require "functionParser.rkt")
 
 (provide interpret
          interpret-tree
          empty-state)
 
-;; Java-lite interpreter, Stage 2.
-;; Statement evaluation uses continuation-passing style so return, break,
-;; continue, and throw can leave nested blocks while preserving scope cleanup.
+;; Java-lite interpreter, Stage 3.
+;; Variables and functions live in layered environments. Variable bindings use
+;; boxes so global and closure side effects work naturally across function calls.
+
+(struct closure (params body env) #:transparent)
 
 (define unassigned-value 'unassigned)
 
 ;; ---------------------------------------------------------------------------
-;; State operations
+;; Environment operations
 
 (define empty-state (list '()))
 
@@ -37,12 +39,16 @@
       [(eq? name (caar layer)) #t]
       [else (state-declared-in-layer? name (cdr layer))])))
 
+(define state-add-cell
+  (lambda (name cell state)
+    (if (state-declared-in-layer? name (state-current-layer state))
+        (error 'M_state "name already declared: ~a" name)
+        (cons (cons (list name cell) (state-current-layer state))
+              (state-enclosing-layers state)))))
+
 (define state-add
   (lambda (name value state)
-    (if (state-declared-in-layer? name (state-current-layer state))
-        (error 'M_state "variable already declared: ~a" name)
-        (cons (cons (list name value) (state-current-layer state))
-              (state-enclosing-layers state)))))
+    (state-add-cell name (box value) state)))
 
 (define state-lookup-in-layer
   (lambda (name layer)
@@ -54,39 +60,35 @@
 (define state-lookup-binding
   (lambda (name state)
     (cond
-      [(null? state) (error 'M_state "variable used before declaration: ~a" name)]
+      [(null? state) (error 'M_state "name used before declaration: ~a" name)]
       [(state-lookup-in-layer name (state-current-layer state))
        => (lambda (binding) binding)]
       [else (state-lookup-binding name (state-enclosing-layers state))])))
 
+(define state-lookup-cell
+  (lambda (name state)
+    (cadr (state-lookup-binding name state))))
+
 (define state-lookup
   (lambda (name state)
-    (let ([value (cadr (state-lookup-binding name state))])
+    (let ([value (unbox (state-lookup-cell name state))])
       (if (eq? value unassigned-value)
-          (error 'M_state "variable used before assignment: ~a" name)
+          (error 'M_state "name used before initialization: ~a" name)
           value))))
-
-(define state-update-layer
-  (lambda (name value layer)
-    (cond
-      [(null? layer) #f]
-      [(eq? name (caar layer)) (cons (list name value) (cdr layer))]
-      [else
-       (let ([updated-rest (state-update-layer name value (cdr layer))])
-         (if updated-rest
-             (cons (car layer) updated-rest)
-             #f))])))
 
 (define state-update
   (lambda (name value state)
-    (cond
-      [(null? state) (error 'M_state "variable assigned before declaration: ~a" name)]
-      [(state-update-layer name value (state-current-layer state))
-       => (lambda (updated-layer)
-            (cons updated-layer (state-enclosing-layers state)))]
-      [else
-       (cons (state-current-layer state)
-             (state-update name value (state-enclosing-layers state)))])))
+    (begin
+      (set-box! (state-lookup-cell name state) value)
+      state)))
+
+(define function-definition?
+  (lambda (statement)
+    (and (pair? statement) (eq? 'function (car statement)))))
+
+(define function-name cadr)
+(define function-params caddr)
+(define function-body cadddr)
 
 ;; ---------------------------------------------------------------------------
 ;; Result helpers for expression evaluation.
@@ -124,6 +126,61 @@
                                (M_boolean-true? right)))))
 
 ;; ---------------------------------------------------------------------------
+;; Function parameter helpers
+
+(define make-param
+  (lambda (mode name)
+    (list mode name)))
+
+(define param-mode car)
+(define param-name cadr)
+
+(define parse-params
+  (lambda (params)
+    (cond
+      [(null? params) '()]
+      [(eq? (car params) '&)
+       (if (or (null? (cdr params)) (eq? (cadr params) '&))
+           (error 'M_value "missing reference parameter name")
+           (cons (make-param 'reference (cadr params))
+                 (parse-params (cddr params))))]
+      [else
+       (cons (make-param 'value (car params))
+             (parse-params (cdr params)))])))
+
+(define bind-arguments
+  (lambda (params args caller-state function-state return-k throw-k)
+    (cond
+      [(and (null? params) (null? args)) (return-k function-state)]
+      [(or (null? params) (null? args))
+       (error 'M_value "wrong number of arguments")]
+      [(eq? 'reference (param-mode (car params)))
+       (let ([arg (car args)])
+         (if (symbol? arg)
+             (bind-arguments (cdr params)
+                             (cdr args)
+                             caller-state
+                             (state-add-cell (param-name (car params))
+                                             (state-lookup-cell arg caller-state)
+                                             function-state)
+                             return-k
+                             throw-k)
+             (error 'M_value "reference argument must be a variable: ~a" arg)))]
+      [else
+       (M_value (car args)
+                caller-state
+                (lambda (value next-caller-state)
+                  (bind-arguments (cdr params)
+                                  (cdr args)
+                                  next-caller-state
+                                  (state-add (param-name (car params))
+                                             value
+                                             function-state)
+                                  return-k
+                                  throw-k))
+                throw-k)])))
+
+;; ---------------------------------------------------------------------------
 ;; Value operations
 
 (define M_value-binary
@@ -144,93 +201,150 @@
       [(||) (M_boolean-or left right)]
       [else (error 'M_value "unknown binary operator: ~a" operator)])))
 
+(define M_value-funcall
+  (lambda (expression state return-k throw-k)
+    (let ([function-value (state-lookup (cadr expression) state)])
+      (if (not (closure? function-value))
+          (error 'M_value "attempted to call a non-function: ~a" (cadr expression))
+          (let ([function-state (state-enter-scope (closure-env function-value))])
+            (bind-arguments (parse-params (closure-params function-value))
+                            (cddr expression)
+                            state
+                            function-state
+                            (lambda (call-state)
+                              (M_state-list (closure-body function-value)
+                                            call-state
+                                            (lambda (value return-state)
+                                              (return-k value state))
+                                            (lambda (break-state)
+                                              (error 'M_state "break used outside of a loop"))
+                                            (lambda (continue-state)
+                                              (error 'M_state "continue used outside of a loop"))
+                                            (lambda (value throw-state)
+                                              (throw-k value state))
+                                            (lambda (normal-state)
+                                              (return-k unassigned-value state))))
+                            throw-k))))))
+
 (define M_value
-  (lambda (expression state)
+  (lambda (expression state return-k throw-k)
     (cond
-      [(number? expression) (make-result expression state)]
-      [(eq? expression 'true) (make-result 'true state)]
-      [(eq? expression 'false) (make-result 'false state)]
-      [(symbol? expression) (make-result (state-lookup expression state) state)]
+      [(number? expression) (return-k expression state)]
+      [(eq? expression 'true) (return-k 'true state)]
+      [(eq? expression 'false) (return-k 'false state)]
+      [(symbol? expression) (return-k (state-lookup expression state) state)]
       [(and (pair? expression) (eq? '= (car expression)))
-       (let* ([value-result (M_value (caddr expression) state)]
-              [new-state (state-update (cadr expression)
-                                       (result-value value-result)
-                                       (result-state value-result))])
-         (make-result (result-value value-result) new-state))]
+       (M_value (caddr expression)
+                state
+                (lambda (value value-state)
+                  (return-k value (state-update (cadr expression) value value-state)))
+                throw-k)]
+      [(and (pair? expression) (eq? 'funcall (car expression)))
+       (M_value-funcall expression state return-k throw-k)]
       [(and (pair? expression) (eq? '- (car expression)) (null? (cddr expression)))
-       (let ([value-result (M_value (cadr expression) state)])
-         (make-result (- (result-value value-result)) (result-state value-result)))]
+       (M_value (cadr expression)
+                state
+                (lambda (value value-state)
+                  (return-k (- value) value-state))
+                throw-k)]
       [(and (pair? expression) (eq? '! (car expression)))
-       (let ([value-result (M_value (cadr expression) state)])
-         (make-result (M_boolean-not (result-value value-result))
-                      (result-state value-result)))]
+       (M_value (cadr expression)
+                state
+                (lambda (value value-state)
+                  (return-k (M_boolean-not value) value-state))
+                throw-k)]
       [(pair? expression)
-       (let* ([left-result (M_value (cadr expression) state)]
-              [right-result (M_value (caddr expression) (result-state left-result))])
-         (make-result (M_value-binary (car expression)
-                                      (result-value left-result)
-                                      (result-value right-result))
-                      (result-state right-result)))]
+       (M_value (cadr expression)
+                state
+                (lambda (left left-state)
+                  (M_value (caddr expression)
+                           left-state
+                           (lambda (right right-state)
+                             (return-k (M_value-binary (car expression) left right)
+                                       right-state))
+                           throw-k))
+                throw-k)]
       [else (error 'M_value "unknown expression: ~a" expression)])))
 
 ;; ---------------------------------------------------------------------------
 ;; Statement operations
 
 (define M_state-declare
-  (lambda (statement state next-k)
+  (lambda (statement state return-k throw-k next-k)
     (if (null? (cddr statement))
         (next-k (state-add (cadr statement) unassigned-value state))
-        (let ([value-result (M_value (caddr statement) state)])
-          (next-k (state-add (cadr statement)
-                             (result-value value-result)
-                             (result-state value-result)))))))
+        (M_value (caddr statement)
+                 state
+                 (lambda (value value-state)
+                   (next-k (state-add (cadr statement) value value-state)))
+                 throw-k))))
 
 (define M_state-assign
-  (lambda (statement state next-k)
-    (next-k (result-state (M_value statement state)))))
+  (lambda (statement state throw-k next-k)
+    (M_value statement state
+             (lambda (value value-state) (next-k value-state))
+             throw-k)))
 
 (define M_state-return
-  (lambda (statement state return-k)
-    (let ([value-result (M_value (cadr statement) state)])
-      (return-k (result-value value-result)
-                (result-state value-result)))))
+  (lambda (statement state return-k throw-k)
+    (M_value (cadr statement)
+             state
+             (lambda (value value-state)
+               (return-k value value-state))
+             throw-k)))
 
 (define M_state-throw
   (lambda (statement state throw-k)
-    (let ([value-result (M_value (cadr statement) state)])
-      (throw-k (result-value value-result)
-               (result-state value-result)))))
+    (M_value (cadr statement)
+             state
+             (lambda (value value-state)
+               (throw-k value value-state))
+             throw-k)))
+
+(define M_state-function
+  (lambda (statement state next-k)
+    (next-k (state-update (function-name statement)
+                          (closure (function-params statement)
+                                   (function-body statement)
+                                   state)
+                          state))))
 
 (define M_state-if
   (lambda (statement state return-k break-k continue-k throw-k next-k)
-    (let ([condition-result (M_value (cadr statement) state)])
-      (cond
-        [(M_boolean-true? (result-value condition-result))
-         (M_state (caddr statement)
-                  (result-state condition-result)
-                  return-k break-k continue-k throw-k next-k)]
-        [(null? (cdddr statement)) (next-k (result-state condition-result))]
-        [else
-         (M_state (cadddr statement)
-                  (result-state condition-result)
-                  return-k break-k continue-k throw-k next-k)]))))
+    (M_value (cadr statement)
+             state
+             (lambda (condition condition-state)
+               (cond
+                 [(M_boolean-true? condition)
+                  (M_state (caddr statement)
+                           condition-state
+                           return-k break-k continue-k throw-k next-k)]
+                 [(null? (cdddr statement)) (next-k condition-state)]
+                 [else
+                  (M_state (cadddr statement)
+                           condition-state
+                           return-k break-k continue-k throw-k next-k)]))
+             throw-k)))
 
 (define M_state-while
   (lambda (statement state return-k break-k continue-k throw-k next-k)
-    (let ([condition-result (M_value (cadr statement) state)])
-      (if (M_boolean-true? (result-value condition-result))
-          (M_state (caddr statement)
-                   (result-state condition-result)
-                   return-k
-                   (lambda (break-state) (next-k break-state))
-                   (lambda (continue-state)
-                     (M_state-while statement continue-state
-                                    return-k break-k continue-k throw-k next-k))
-                   throw-k
-                   (lambda (body-state)
-                     (M_state-while statement body-state
-                                    return-k break-k continue-k throw-k next-k)))
-          (next-k (result-state condition-result))))))
+    (M_value (cadr statement)
+             state
+             (lambda (condition condition-state)
+               (if (M_boolean-true? condition)
+                   (M_state (caddr statement)
+                            condition-state
+                            return-k
+                            (lambda (break-state) (next-k break-state))
+                            (lambda (continue-state)
+                              (M_state-while statement continue-state
+                                             return-k break-k continue-k throw-k next-k))
+                            throw-k
+                            (lambda (body-state)
+                              (M_state-while statement body-state
+                                             return-k break-k continue-k throw-k next-k)))
+                   (next-k condition-state)))
+             throw-k)))
 
 (define M_state-block
   (lambda (statements state return-k break-k continue-k throw-k next-k)
@@ -354,9 +468,13 @@
 (define M_state
   (lambda (statement state return-k break-k continue-k throw-k next-k)
     (case (car statement)
-      [(var) (M_state-declare statement state next-k)]
-      [(=) (M_state-assign statement state next-k)]
-      [(return) (M_state-return statement state return-k)]
+      [(var) (M_state-declare statement state return-k throw-k next-k)]
+      [(=) (M_state-assign statement state throw-k next-k)]
+      [(funcall) (M_value statement state
+                          (lambda (value value-state) (next-k value-state))
+                          throw-k)]
+      [(function) (M_state-function statement state next-k)]
+      [(return) (M_state-return statement state return-k throw-k)]
       [(break) (break-k state)]
       [(continue) (continue-k state)]
       [(throw) (M_state-throw statement state throw-k)]
@@ -366,30 +484,104 @@
       [(try) (M_state-try statement state return-k break-k continue-k throw-k next-k)]
       [else (error 'M_state "unknown statement: ~a" statement)])))
 
+(define M_state-add-function-names
+  (lambda (statements state)
+    (cond
+      [(null? statements) state]
+      [(function-definition? (car statements))
+       (M_state-add-function-names
+        (cdr statements)
+        (state-add (function-name (car statements)) unassigned-value state))]
+      [else (M_state-add-function-names (cdr statements) state)])))
+
+(define M_state-install-function-closures
+  (lambda (statements state)
+    (cond
+      [(null? statements) state]
+      [(function-definition? (car statements))
+       (M_state-install-function-closures
+        (cdr statements)
+        (state-update (function-name (car statements))
+                      (closure (function-params (car statements))
+                               (function-body (car statements))
+                               state)
+                      state))]
+      [else (M_state-install-function-closures (cdr statements) state)])))
+
+(define M_state-hoist-functions
+  (lambda (statements state)
+    (M_state-install-function-closures
+     statements
+     (M_state-add-function-names statements state))))
+
 (define M_state-list
   (lambda (statements state return-k break-k continue-k throw-k next-k)
-    (if (null? statements)
-        (next-k state)
-        (M_state (car statements)
-                 state
-                 return-k break-k continue-k throw-k
-                 (lambda (next-state)
-                   (M_state-list (cdr statements)
-                                 next-state
-                                 return-k break-k continue-k throw-k next-k))))))
+    (let ([hoisted-state (M_state-hoist-functions statements state)])
+      (letrec ([execute
+                (lambda (remaining current-state)
+                  (cond
+                    [(null? remaining) (next-k current-state)]
+                    [else
+                     (M_state (car remaining)
+                              current-state
+                              return-k break-k continue-k throw-k
+                              (lambda (next-state)
+                                (execute (cdr remaining) next-state)))]))])
+        (execute statements hoisted-state)))))
+
+;; ---------------------------------------------------------------------------
+;; Top-level program operations
+
+(define M_state-top-statements
+  (lambda (statements state next-k throw-k)
+    (cond
+      [(null? statements) (next-k state)]
+      [(function-definition? (car statements))
+       (M_state-top-statements
+        (cdr statements)
+        (state-update (function-name (car statements))
+                      (closure (function-params (car statements))
+                               (function-body (car statements))
+                               state)
+                      state)
+        next-k
+        throw-k)]
+      [(eq? 'var (caar statements))
+       (M_state-declare (car statements)
+                        state
+                        (lambda (value state)
+                          (error 'M_state "return used outside of a function"))
+                        throw-k
+                        (lambda (next-state)
+                          (M_state-top-statements (cdr statements) next-state next-k throw-k)))]
+      [else (error 'M_state "illegal top-level statement: ~a" (car statements))])))
+
+(define M_state-top
+  (lambda (statements state next-k throw-k)
+    (M_state-top-statements
+     statements
+     (M_state-add-function-names statements state)
+     next-k
+     throw-k)))
+
+(define call-main
+  (lambda (state)
+    (M_value '(funcall main)
+             state
+             (lambda (value value-state) value)
+             (lambda (value throw-state)
+               (error 'M_state "uncaught exception: ~a" value)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Public entry points
 
 (define interpret-tree
   (lambda (syntax-tree)
-    (M_state-list syntax-tree
-                  empty-state
-                  (lambda (value state) value)
-                  (lambda (state) (error 'M_state "break used outside of a loop"))
-                  (lambda (state) (error 'M_state "continue used outside of a loop"))
-                  (lambda (value state) (error 'M_state "uncaught exception: ~a" value))
-                  (lambda (state) (error 'M_state "program ended without return")))))
+    (M_state-top syntax-tree
+                 empty-state
+                 call-main
+                 (lambda (value throw-state)
+                   (error 'M_state "uncaught exception: ~a" value)))))
 
 (define interpret
   (lambda (filename)
