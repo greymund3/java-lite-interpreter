@@ -2,6 +2,23 @@
 
 All notable project changes will be recorded here.
 
+## [0.3.0] - Stage 3 Functions
+
+### Added
+- Added the supplied `functionParser.rkt` parser.
+- Added global and nested function definitions.
+- Added recursive function calls and static scoping for nested functions.
+- Added function calls as both statements and expressions.
+- Added function calls inside larger expressions, arguments, assignments, and exception-producing code paths.
+- Added call-by-value parameters and call-by-reference parameters with `&`.
+- Added Part 3 RackUnit coverage, including the extra reference-parameter tests.
+- Added the original downloaded Part 3 sample test HTML.
+
+### Changed
+- Switched variable and function bindings to boxes so functions can update globals and captured variables.
+- Changed value evaluation to continuation-passing style so throws can propagate through function calls inside expressions.
+- Updated project documentation from Stage 2 to Stage 3.
+
 ## [0.2.0] - Stage 2 Control Flow
 
 ### Added

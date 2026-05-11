@@ -4,7 +4,7 @@ Java-lite Interpreter is a Racket interpreter for a small Java/C-style language.
 
 ## Current Stage
 
-**Version 0.2.0: Stage 2 Control Flow**
+**Version 0.3.0: Stage 3 Functions**
 
 This stage supports:
 
@@ -23,20 +23,30 @@ This stage supports:
 - `continue`
 - `throw`
 - `try` / `catch` / `finally`
+- global function definitions
+- recursive function calls
+- nested functions with static scoping
+- function calls as statements and expressions
+- boolean and integer function parameters/return values
+- call-by-value parameters
+- call-by-reference parameters using `&`
 
-The interpreter keeps the variable state behind helper functions and uses
-layered scopes so block-local variables are removed when the block exits.
-Statement evaluation uses continuations for `return`, `break`, `continue`, and
-`throw`.
+The interpreter keeps the environment behind helper functions and uses layered
+scopes so block-local variables are removed when the block exits. Bindings use
+boxes so functions and nested functions can update globals and captured
+variables. Statement and value evaluation use continuations so function calls
+can participate in expressions and still propagate `throw` correctly.
 
 ## Files
 
-- `interpreter.rkt` - Stage 2 interpreter and public `interpret` function.
+- `interpreter.rkt` - Stage 3 interpreter and public `interpret` function.
+- `functionParser.rkt` - supplied Stage 3 parser with function support.
 - `simpleParser.rkt` - supplied parser.
 - `lex.rkt` - supplied lexer, renamed from `lex-2.rkt` so the parser can require it.
-- `interpreter-tests.rkt` - RackUnit tests for the supplied Part 1 and Part 2 programs.
+- `interpreter-tests.rkt` - RackUnit tests for the supplied Part 3 programs.
 - `part1tests.html` - original downloaded sample tests.
 - `part2tests.html` - original downloaded Stage 2 sample tests.
+- `part3tests.html` - original downloaded Stage 3 sample tests.
 - `CHANGELOG.md` - versioned project history.
 
 ## Usage
