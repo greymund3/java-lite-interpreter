@@ -5,496 +5,584 @@
          "interpreter.rkt")
 
 (define run-program
-  (lambda (source)
+  (lambda (classname source)
     (let ([filename (make-temporary-file "java-lite-test-~a.txt")])
       (call-with-output-file filename
         (lambda (out) (display source out))
         #:exists 'replace)
-      (interpret filename))))
+      (interpret filename classname))))
 
 (define check-program
-  (lambda (name expected source)
+  (lambda (name classname expected source)
     (test-case name
-      (check-equal? (run-program source) expected))))
+      (check-equal? (run-program classname source) expected))))
 
 (define check-error-program
-  (lambda (name source)
+  (lambda (name classname source)
     (test-case name
       (check-exn exn:fail?
-                 (lambda () (run-program source))))))
+                 (lambda () (run-program classname source))))))
 
-(define part3-tests
+(define part4-tests
   (test-suite
-   "Part 3 sample programs"
+   "Part 4 required class/object programs"
 
-   (check-program "test 01: main with local code" 10
-                  "function main() {
-                     var x = 10;
-                     var y = 20;
-                     var z = 30;
-                     var min = 0;
+   (check-program "test 01: object field access" "A" 15
+                  "class A {
+                     var x = 5;
+                     var y = 10;
 
-                     if (x < y)
-                       min = x;
-                     else
-                       min = y;
-                     if (min > z)
-                       min = z;
-                     return min;
-                   }")
-
-   (check-program "test 02: global variables" 14
-                  "var x = 4;
-                   var y = 6 + x;
-
-                   function main() {
-                     return x + y;
-                   }")
-
-   (check-program "test 03: function changes globals" 45
-                  "var x = 1;
-                   var y = 10;
-                   var r = 0;
-
-                   function main() {
-                     while (x < y) {
-                       r = r + x;
-                       x = x + 1;
+                     static function main() {
+                       var a = new A();
+                       return a.x + a.y;
                      }
-                     return r;
                    }")
 
-   (check-program "test 04: recursive fib" 55
-                  "function fib(a) {
-                     if (a == 0)
+   (check-program "test 02: object method call" "A" 12
+                  "class A {
+                     function add(g, h) {
+                       return g + h;
+                     }
+
+                     static function main() {
+                       var a = new A();
+                       return a.add(10, 2);
+                     }
+                   }")
+
+   (check-program "test 03: this field access" "A" 125
+                  "class A {
+                     var x = 100;
+
+                     function add(x) {
+                       return this.x + x;
+                     }
+
+                     static function main() {
+                       var a = new A();
+                       return a.add(25);
+                     }
+                   }")
+
+   (check-program "test 04: field update across objects" "A" 36
+                  "class A {
+                     var x = 100;
+
+                     function setX(x) {
+                       this.x = x;
+                     }
+
+                     function add(a) {
+                       return a.x + this.x;
+                     }
+
+                     static function main() {
+                       var a1 = new A();
+                       var a2 = new A();
+                       a1.setX(30);
+                       a2.setX(6);
+                       return a1.add(a2);
+                     }
+                   }")
+
+   (check-program "test 05: method calls through fields" "A" 54
+                  "class A {
+                     var x = 100;
+
+                     function setX(x) {
+                       this.x = x;
+                     }
+
+                     function getX() {
+                       return this.x;
+                     }
+
+                     function add(a) {
+                       return a.getX() + this.getX();
+                     }
+
+                     static function main() {
+                       var a1 = new A();
+                       var a2 = new A();
+                       a1.setX(50);
+                       a2.setX(4);
+                       return a1.add(a2);
+                     }
+                   }")
+
+   (check-program "test 06: chained new and dot access" "A" 110
+                  "class A {
+                     var x = 100;
+                     var y = 10;
+
+                     function add(g, h) {
+                       return g + h;
+                     }
+
+                     static function main() {
+                       return new A().add(new A().x, new A().y);
+                     }
+                   }")
+
+   (check-program "test 07: inheritance and super dispatch" "C" 26
+                  "class A {
+                     var x = 1;
+                     var y = 2;
+
+                     function m() {
+                       return this.m2();
+                     }
+
+                     function m2() {
+                       return x+y;
+                     }
+                   }
+
+                   class B extends A {
+                     var y = 22;
+                     var z = 3;
+
+                     function m() {
+                       return super.m();
+                     }
+
+                     function m2() {
+                       return x+y+z;
+                     }
+                   }
+
+                   class C extends B {
+                     var y = 222;
+                     var w = 4;
+
+                     function m() {
+                       return super.m();
+                     }
+
+                     static function main() {
+                       return new C().m();
+                     }
+                   }")
+
+   (check-program "test 08: inherited setters and polymorphic area" "Square" 117
+                  "class Shape {
+                     function area() {
                        return 0;
-                     else if (a == 1)
-                       return 1;
-                     else
-                       return fib(a-1) + fib(a-2);
-                   }
-
-                   function main() {
-                     return fib(10);
-                   }")
-
-   (check-program "test 05: parameters hide globals" 1
-                  "function min(x, y, z) {
-                     if (x < y) {
-                       if (x < z)
-                         return x;
-                       else if (z < x)
-                         return z;
                      }
-                     else if (y > z)
-                       return z;
-                     else
-                       return y;
                    }
 
-                   var x = 10;
-                   var y = 20;
-                   var z = 30;
+                   class Rectangle extends Shape {
+                     var height;
+                     var width;
 
-                   var min1 = min(x,y,z);
-                   var min2 = min(z,y,x);
-
-                   function main() {
-                     var min3 = min(y,z,x);
-
-                     if (min1 == min3)
-                       if (min1 == min2)
-                         if (min2 == min3)
-                           return 1;
-                     return 0;
-                   }")
-
-   (check-program "test 06: static scoping" 115
-                  "var a = 10;
-                   var b = 20;
-
-                   function bmethod() {
-                     var b = 30;
-                     return a + b;
-                   }
-
-                   function cmethod() {
-                     var a = 40;
-                     return bmethod() + a + b;
-                   }
-
-                   function main () {
-                     var b = 5;
-                     return cmethod() + a + b;
-                   }")
-
-   (check-program "test 07: boolean parameters and returns" 'true
-                  "function minmax(a, b, min) {
-                     if (min && a < b || !min && a > b)
-                       return true;
-                     else
-                       return false;
-                   }
-
-                   function main() {
-                     return (minmax(10, 100, true) && minmax(5, 3, false));
-                   }")
-
-   (check-program "test 08: calls in expressions" 20
-                  "function fact(n) {
-                     var f = 1;
-                     while (n > 1) {
-                       f = f * n;
-                       n = n - 1;
-                     }
-                     return f;
-                   }
-
-                   function binom(a, b) {
-                     var val = fact(a) / (fact(b) * fact(a-b));
-                     return val;
-                   }
-
-                   function main() {
-                     return binom(6,3);
-                   }")
-
-   (check-program "test 09: call as argument" 24
-                  "function fact(n) {
-                     var r = 1;
-                     while (n > 1) {
-                       r = r * n;
-                       n = n - 1;
-                     }
-                     return r;
-                   }
-
-                   function main() {
-                     return fact(fact(3) - fact(2));
-                   }")
-
-   (check-program "test 10: ignored function return" 2
-                  "var count = 0;
-
-                   function f(a,b) {
-                     count = count + 1;
-                     a = a + b;
-                     return a;
-                   }
-
-                   function main() {
-                     f(1, 2);
-                     f(3, 4);
-                     return count;
-                   }")
-
-   (check-program "test 11: function without return" 35
-                  "var x = 0;
-                   var y = 0;
-
-                   function setx(a) {
-                     x = a;
-                   }
-
-                   function sety(b) {
-                     y = b;
-                   }
-
-                   function main() {
-                     setx(5);
-                     sety(7);
-                     return x * y;
-                   }")
-
-   (check-error-program "test 12: wrong argument count"
-                        "function f(a) {
-                           return a*a;
-                         }
-
-                         function main() {
-                           return f(10, 11, 12);
-                         }")
-
-   (check-program "test 13: nested functions" 90
-                  "function main() {
-                     function h() {
-                       return 10;
+                     function setHeight(h) {
+                       height = h;
                      }
 
-                     function g() {
-                       return 100;
+                     function setWidth(w) {
+                       width = w;
                      }
 
-                     return g() - h();
+                     function getHeight() {
+                       return height;
+                     }
+
+                     function getWidth() {
+                       return width;
+                     }
+
+                     function area() {
+                       return getWidth() * getHeight();
+                     }
+                   }
+
+                   class Square extends Rectangle {
+                     function setSize(size) {
+                       super.setWidth(size);
+                     }
+
+                     function getHeight() {
+                       return super.getWidth();
+                     }
+
+                     function setHeight(h) {
+                       super.setWidth(h);
+                     }
+
+                     static function main() {
+                       var s = new Square();
+                       var sum = 0;
+                       s.setSize(10);
+                       sum = sum + s.area();
+                       s.setHeight(4);
+                       sum = sum + s.area();
+                       s.setWidth(1);
+                       sum = sum + s.area();
+                       return sum;
+                     }
                    }")
 
-   (check-program "test 14: nested closures update outer locals" 69
-                  "function collatz(n) {
-                     var counteven = 0;
-                     var countodd = 0;
-
-                     function evenstep(n) {
-                       counteven = counteven + 1;
-                       return n / 2;
+   (check-program "test 09: polymorphic comparison" "Square" 32
+                  "class Shape {
+                     function area() {
+                       return 0;
                      }
 
-                     function oddstep(n) {
-                       countodd = countodd + 1;
-                       return 3 * n + 1;
+                     function largerThan(s) {
+                       return this.area() > s.area();
+                     }
+                   }
+
+                   class Rectangle extends Shape {
+                     var height;
+                     var width;
+
+                     function setHeight(h) {
+                       height = h;
                      }
 
-                     while (n != 1) {
-                       if (n % 2 == 0)
-                         n = evenstep(n);
+                     function setWidth(w) {
+                       width = w;
+                     }
+
+                     function getHeight() {
+                       return height;
+                     }
+
+                     function getWidth() {
+                       return width;
+                     }
+
+                     function area() {
+                       return getWidth() * getHeight();
+                     }
+                   }
+
+                   class Square extends Rectangle {
+                     function setSize(size) {
+                       super.setWidth(size);
+                     }
+
+                     function getHeight() {
+                       return super.getWidth();
+                     }
+
+                     function setHeight(h) {
+                       super.setWidth(h);
+                     }
+
+                     static function main() {
+                       var s1 = new Square();
+                       var s2 = new Rectangle();
+                       var s3 = new Square();
+                       s1.setSize(5);
+                       s2.setHeight(8);
+                       s2.setWidth(4);
+                       s3.setWidth(3);
+
+                       var max = s1;
+                       if (s2.largerThan(max))
+                         max = s2;
+                       if (s3.largerThan(max))
+                         max = s3;
+
+                       return max.area();
+                     }
+                   }")
+
+   (check-program "test 10: linked objects" "List" 15
+                  "class List {
+                     var val;
+                     var next;
+
+                     function getNext() {
+                       return next;
+                     }
+
+                     function setNext(x) {
+                       if (x == 0)
+                         next = 0;
+                       else {
+                         next = new List();
+                         next.setVal(val+1);
+                         next.setNext(x-1);
+                       }
+                     }
+
+                     function setVal(x) {
+                       val = x;
+                     }
+
+                     static function main() {
+                       var l = new List();
+                       l.setVal(10);
+                       l.setNext(5);
+                       return l.getNext().getNext().getNext().getNext().getNext().val;
+                     }
+                   }")
+
+   (check-program "test 11: reverse linked list" "List" 123456
+                  "class List {
+                     var val;
+                     var next;
+
+                     function getNext() {
+                       return next;
+                     }
+
+                     function setNext(next) {
+                       this.next = next;
+                     }
+
+                     function makeList(x) {
+                       if (x == 0)
+                         next = 0;
+                       else {
+                         next = new List();
+                         next.setVal(val+1);
+                         next.makeList(x-1);
+                       }
+                     }
+
+                     function setVal(x) {
+                       val = x;
+                     }
+
+                     function reverse() {
+                       if (getNext() == 0)
+                         return this;
                        else
-                         n = oddstep(n);
+                         return getNext().reverse().append(this);
                      }
-                     return counteven + countodd;
-                   }
 
-                   function main() {
-                     return collatz(111);
+                     function append(x) {
+                       var p = this;
+                       while (p.getNext() != 0)
+                         p = p.getNext();
+                       p.setNext(x);
+                       x.setNext(0);
+                       return this;
+                     }
+
+                     static function main() {
+                       var l = new List();
+                       l.setVal(1);
+                       l.makeList(5);
+                       l = l.reverse();
+
+                       var result = 0;
+                       var p = l;
+                       var c = 1;
+                       while (p != 0) {
+                         result = result + c * p.val;
+                         c = c * 10;
+                         p = p.getNext();
+                       }
+                       return result;
+                     }
                    }")
 
-   (check-program "test 15: nested scope shadowing" 87
-                  "function f(n) {
-                     var a;
-                     var b;
-                     var c;
+   (check-program "test 12: nested function inside method" "List" 5285
+                  "class List {
+                     var val;
+                     var next;
 
-                     a = 2 * n;
-                     b = n - 10;
+                     function getNext() {
+                       return next;
+                     }
 
-                     function g(x) {
-                       var a;
-                       a = x + 1;
-                       b = 100;
+                     function makeList(x) {
+                       if (x == 0)
+                         next = 0;
+                       else {
+                         next = new List();
+                         next.setVal(getVal()+1);
+                         next.makeList(x-1);
+                       }
+                     }
+
+                     function setVal(x) {
+                       val = x;
+                     }
+
+                     function getVal() {
+                       return val;
+                     }
+
+                     function expand() {
+                       var p = this;
+                       while (p != 0) {
+                         function exp(a) {
+                           while (a != 0) {
+                             this.setVal(this.getVal() + p.getVal() * a.getVal());
+                             a = a.getNext();
+                           }
+                         }
+                         exp(p);
+                         p = p.getNext();
+                       }
+                     }
+
+                     static function main() {
+                       var l = new List();
+                       l.val = 1;
+                       l.makeList(5);
+                       l.expand();
+                       return l.getVal();
+                     }
+                   }")
+
+   (check-program "test 13: objects with try catch finally" "C" -716
+                  "class A {
+                     var count = 0;
+
+                     function subtract(a, b) {
+                       if (a < b) {
+                         throw b - a;
+                       }
+                       else
+                         return a - b;
+                     }
+                   }
+
+                   class B extends A {
+                     function divide(a, b) {
+                       if (b == 0)
+                         throw a;
+                       else
+                         return a / b;
+                     }
+
+                     function reduce(a, b) {
+                       while (a > 1 || a < -1) {
+                         try {
+                           a = divide(a, b);
+                           if (a == 2)
+                             break;
+                         }
+                         catch (e) {
+                           return subtract(a, b);
+                         }
+                         finally {
+                           count = count + 1;
+                         }
+                       }
                        return a;
                      }
-
-                     if (b == 0)
-                       c = g(a);
-                     else
-                       c = a / b;
-                     return a + b + c;
                    }
 
-                   function main() {
-                     var x = f(10);
-                     var y = f(20);
-
-                     return x - y;
-                   }")
-
-   (check-program "test 16: nested functions inside functions" 64
-                  "function main() {
-                     var result;
-                     var base;
-
-                     function getpow(a) {
+                   class C {
+                     function main() {
                        var x;
+                       var b;
 
-                       function setanswer(n) {
-                         result = n;
+                       b = new B();
+
+                       try {
+                         x = b.reduce(10, 5);
+                         x = x + b.reduce(81, 3);
+                         x = x + b.reduce(5, 0);
+                         x = x + b.reduce(-2, 0);
+                         x = x + b.reduce(12, 4);
                        }
-
-                       function recurse(m) {
-                         if (m > 0) {
-                           x = x * base;
-                           recurse(m-1);
-                         }
-                         else
-                           setanswer(x);
+                       catch (a) {
+                         x = x * a;
                        }
-
-                       x = 1;
-                       recurse(a);
-                     }
-                     base = 2;
-                     getpow(6);
-                     return result;
-                   }")
-
-   (check-error-program "test 17: nested function cannot access sibling local"
-                        "function f(x) {
-                           function g(x) {
-                             var b;
-                             b = x;
-                             return 0;
-                           }
-
-                           function h(x) {
-                             b = x;
-                             return 1;
-                           }
-
-                           return g(x) + h(x);
-                         }
-
-                         function main() {
-                           return f(10);
-                         }")
-
-   (check-program "test 18: function call in try without throw" 125
-                  "function divide(x, y) {
-                     if (y == 0)
-                       throw y;
-                     return x / y;
-                   }
-
-                   function main() {
-                     var x;
-
-                     try {
-                       x = divide(10, 5) * 10;
-                       x = x + divide(5, 1);
-                     }
-                     catch(e) {
-                       x = e;
-                     }
-                     finally {
-                       x = x + 100;
-                     }
-                     return x;
-                   }")
-
-   (check-program "test 19: throw inside function caught by caller" 100
-                  "function divide(x, y) {
-                     if (y == 0)
-                       throw y;
-                     return x / y;
-                   }
-
-                   function main() {
-                     var x;
-
-                     try {
-                       x = divide(10, 5) * 10;
-                       x = x + divide(5, 0);
-                     }
-                     catch(e) {
-                       x = e;
-                     }
-                     finally {
-                       x = x + 100;
-                     }
-                     return x;
-                   }")
-
-   (check-program "test 20: exception through nested function calls" 2000400
-                  "function divide(x, y) {
-                     if (y == 0)
-                       throw 1000000;
-                     return x / y;
-                   }
-
-                   function main() {
-                     var x = 0;
-                     var j = 1;
-
-                     try {
-                       while (j >= 0) {
-                         var i = 10;
-                         while (i >= 0) {
-                           try {
-                             x = x + divide(10*i, i);
-                           }
-                           catch(e) {
-                             x = x + divide(e, j);
-                           }
-                           i = i - 1;
-                         }
-                         j = j - 1;
+                       finally {
+                         x = -1 * x;
                        }
+                       return x - b.count * 100;
                      }
-                     catch (e2) {
-                       x = x * 2;
-                     }
-                     return x;
                    }")
 
-   (check-program "test 21: reference parameters" 3421
-                  "function swap1(x, y) {
-                     var temp = x;
-                     x = y;
-                     y = temp;
-                   }
-
-                   function swap2(&x, &y) {
-                     var temp = x;
-                     x = y;
-                     y = temp;
-                   }
-
-                   function main() {
-                     var a = 1;
-                     var b = 2;
-                     swap1(a,b);
-                     var c = 3;
-                     var d = 4;
-                     swap2(c,d);
-                     return a + 10*b + 100*c + 1000*d;
-                   }")
-
-   (check-program "test 22: assignment side effects with calls" 20332
-                  "var x;
-
-                   function f(a,b) {
-                     return a * 100 + b;
-                   }
-
-                   function fib(f) {
-                     var last = 0;
-                     var last1 = 1;
-
-                     while (f > 0) {
-                       f = f - 1;
-                       var temp = last1 + last;
-                       last = last1;
-                       last1 = temp;
+   (check-program "test 21: overloaded methods by arity" "A" 530
+                  "class A {
+                     function add(a, b) {
+                       return a + b;
                      }
-                     return last;
-                   }
 
-                   function main() {
-                     var y;
-                     var z = f(x = fib(3), y = fib(4));
-                     return z * 100 + y * 10 + x;
+                     function add(a,b,c) {
+                       return a + b + c;
+                     }
+
+                     static function main() {
+                       var x = 10;
+                       var y = 20;
+                       return new A().add(x, y) + new A().add(x, y, y) * 10;
+                     }
                    }")
 
-   (check-program "test 23: mixed value and reference params" 21
-                  "function gcd(a, &b) {
-                     if (a < b) {
+   (check-program "test 22: inherited overloaded methods" "B" 66
+                  "class A {
+                     var x = 10;
+                     var y = 20;
+
+                     function add(a, b) {
+                       return a + b;
+                     }
+
+                     function add(a,b,c) {
+                       return a + b + c;
+                     }
+                   }
+
+                   class B extends A {
+                     var x = 2;
+                     var y = 30;
+
+                     function add(a,b) {
+                       return a*b;
+                     }
+
+                     static function main() {
+                       var b = new B();
+                       return b.add(b.x,b.y) + b.add(b.x,b.x,b.x);
+                     }
+                   }")
+
+   (check-program "test 23: reference parameters with fields" "A" 1026
+                  "class A {
+                     var x = 5;
+
+                     function swap(& a, & b) {
                        var temp = a;
                        a = b;
                        b = temp;
                      }
-                     var r = a % b;
-                     while (r != 0) {
-                       a = b;
-                       b = r;
-                       r = a % b;
+
+                     static function main() {
+                       var y = 10;
+                       var sum = 0;
+                       var a = new A();
+
+                       a.swap(a.x, y);
+                       sum = a.x * 100 + y;
+                       a.x = 1;
+                       y = 2;
+                       a.swap(a.x, y);
+                       sum = sum + a.x * 10 + y;
+                       return sum;
                      }
-                     return b;
-                   }
-                   function main () {
-                     var x = 14;
-                     var y = 3 * x - 7;
-                     gcd(x,y);
-                     return x+y;
                    }")
 
-   (check-error-program "extra: reference argument must be a variable"
-                        "function swap(&x, &y) {
-                           var temp = x;
-                           x = y;
-                           y = temp;
-                         }
+   (check-program "test 24: assignment side effects in methods" "A" 2045
+                  "class A {
+                     var x = 0;
 
-                         function main() {
-                           var x = 10;
-                           return swap(x, x + 1);
-                         }")))
+                     function setSum(limit) {
+                       var sum = 0;
+                       while ((x = x + 1) < limit) {
+                         sum = sum + x;
+                       }
+                       return sum;
+                     }
+
+                     static function main () {
+                       var a = new A();
+                       var j = a.setSum(10);
+                       return (a.x * 200 + j);
+                     }
+                   }")))
 
 (module+ test
-  (run-tests part3-tests))
+  (run-tests part4-tests))
