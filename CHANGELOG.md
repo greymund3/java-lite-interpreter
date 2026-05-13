@@ -2,6 +2,23 @@
 
 All notable project changes will be recorded here.
 
+## [0.4.0] - Stage 4 Classes and Objects
+
+### Added
+- Added the supplied `classParser.rkt` parser.
+- Added class closures, object instances, instance fields, and instance methods.
+- Added `new`, dot field access, dot method calls, `this`, and `super`.
+- Added single inheritance and dynamic method dispatch.
+- Added static `main` method entry by requested class name.
+- Added overloaded method lookup by arity.
+- Added object field support for call-by-reference parameters.
+- Added Part 4 RackUnit coverage for required tests 1-13 and optional tests 21-24.
+- Added the original downloaded Part 4 sample test HTML.
+
+### Changed
+- Updated `interpret` to accept both a filename and class name.
+- Updated project documentation from Stage 3 to Stage 4.
+
 ## [0.3.0] - Stage 3 Functions
 
 ### Added
